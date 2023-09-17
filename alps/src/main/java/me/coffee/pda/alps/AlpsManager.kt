@@ -2,9 +2,6 @@ package me.coffee.pda.alps
 
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.os.Message
 import cn.pda.serialport.Tools
 import com.handheld.uhfr.UHFRManager
 import com.uhf.api.cls.Reader
@@ -18,17 +15,8 @@ object AlpsManager {
     private var mScanUtil: ScanUtil? = null
 
     private val mUHFThread: UHFThread by lazy { UHFThread() }
-    private val mScanThread: ScanThread by lazy {
-        val mScanHandler = object : Handler(Looper.getMainLooper()) {
-            override fun handleMessage(msg: Message) {
-                if (msg.what != ScanThread.SCAN) return
-                val dataBytes = msg.data.getByteArray("dataBytes")
-                if (dataBytes == null || dataBytes.isEmpty()) return
-                val data = String(dataBytes, 0, dataBytes.size)
-                scanCallback?.invoke(data)
-            }
-        }
-        ScanThread(mScanHandler)
+    private val mScanManager: ScanManager by lazy {
+        ScanManager().apply { setScanListener { scanCallback?.invoke(it) } }
     }
 
     private var isReading = false
@@ -38,7 +26,7 @@ object AlpsManager {
 
     fun init(context: Context) {
         mScanUtil = ScanUtil.getInstance(context)
-        initScan()
+        mScanManager.init(context)
     }
 
     fun initUHF() {
@@ -54,9 +42,6 @@ object AlpsManager {
         }
     }
 
-    private fun initScan() {
-        mScanThread.start()
-    }
 
     fun releaseUHF() {
         mUhf?.close()
@@ -82,12 +67,14 @@ object AlpsManager {
         }
     }
 
+
     fun startScan() {
-        mScanThread.scan()
+        mScanManager.start()
+        mScanManager.scan()
     }
 
     fun stopScan() {
-        mScanThread.stopScan()
+        mScanManager.stop()
     }
 
     fun startUHF() {
@@ -103,7 +90,7 @@ object AlpsManager {
     fun release() {
         stopUHF()
         releaseUHF()
-        mScanThread.close()
+        mScanManager.close()
     }
 
     fun handleData(info: TAGINFO): String {
